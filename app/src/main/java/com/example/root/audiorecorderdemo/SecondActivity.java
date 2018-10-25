@@ -35,7 +35,7 @@ public class SecondActivity extends Activity {
     private final String MINE_TYPE = "audio/mp4a-latm";
     private int rate = 256000;
     //录音设置
-    private int sampleRate = 44100;   //采样率，默认44.1k
+    private int sampleRate = 44100;   //采样率44.1k
     private int channelCount = 2;     //音频采样通道，默认2通道
     private int channelConfig = AudioFormat.CHANNEL_IN_STEREO;        //通道设置，默认立体声
     private int audioFormat = AudioFormat.ENCODING_PCM_16BIT;     //设置采样数据格式，默认16比特PCM
@@ -57,6 +57,7 @@ public class SecondActivity extends Activity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        //View 相关
         setContentView(R.layout.layout_second);
         mStart = findViewById(R.id.start_recorder);
         mStop = findViewById(R.id.stop_recorder);
@@ -69,7 +70,7 @@ public class SecondActivity extends Activity {
         } catch (FileNotFoundException e) {
             e.printStackTrace();
         }
-
+        //编码器设置
         MediaFormat format = MediaFormat.createAudioFormat(MINE_TYPE, sampleRate, channelCount);
         format.setInteger(MediaFormat.KEY_AAC_PROFILE, MediaCodecInfo.CodecProfileLevel.AACObjectLC);
         format.setInteger(MediaFormat.KEY_BIT_RATE, rate);
@@ -81,6 +82,7 @@ public class SecondActivity extends Activity {
             e.printStackTrace();
         }
 
+        //audio recorder init
         bufferSize = AudioRecord.getMinBufferSize(sampleRate, channelConfig, audioFormat) * 2;
         buffer = new byte[bufferSize];
         mRecord = new AudioRecord(MediaRecorder.AudioSource.MIC, sampleRate, channelConfig,
@@ -94,7 +96,7 @@ public class SecondActivity extends Activity {
             mRecord.startRecording();
             isRecording = true;
             if (mThread == null) {
-                mThread = new MyThread("yin pin bian ma");
+                mThread = new MyThread("Thread-Audio-Encode");
                 mThread.start();
             }
         }
