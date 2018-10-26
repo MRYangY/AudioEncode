@@ -15,6 +15,7 @@ import android.support.annotation.NonNull;
 import android.util.Log;
 import android.view.View;
 import android.widget.Button;
+import android.widget.Toast;
 
 import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
@@ -32,14 +33,13 @@ public class SecondActivity extends Activity {
 
     private static final String TAG = "SecondActivity";
 
-    private final String MINE_TYPE = "audio/mp4a-latm";
+    private final String MINE_TYPE = MediaFormat.MIMETYPE_AUDIO_AAC;
     private int rate = 256000;
     //录音设置
     private int sampleRate = 44100;   //采样率44.1k
-    private int channelCount = 2;     //音频采样通道，默认2通道
-    private int channelConfig = AudioFormat.CHANNEL_IN_STEREO;        //通道设置，默认立体声
-    private int audioFormat = AudioFormat.ENCODING_PCM_16BIT;     //设置采样数据格式，默认16比特PCM
-    private byte[] buffer;
+    private int channelCount = 2;     //音频采样通道，2通道
+    private int channelConfig = AudioFormat.CHANNEL_IN_STEREO;        //通道设置，立体声
+    private int audioFormat = AudioFormat.ENCODING_PCM_16BIT;     //设置采样数据格式，16比特PCM
     private int bufferSize;
     private volatile boolean isRecording;
 
@@ -64,7 +64,11 @@ public class SecondActivity extends Activity {
         mStart.setOnClickListener(mStartListener);
         mStop.setOnClickListener(mStopListener);
 
-        fileStore = Environment.getExternalStorageDirectory() + "/rain.aac";
+        if (Environment.getExternalStorageState().equals(Environment.MEDIA_MOUNTED)) {
+            fileStore = Environment.getExternalStorageDirectory() + "/encode_aac_file.aac";
+        }else {
+            fileStore = getCacheDir().getAbsolutePath() + "/encode_aac_file.aac";
+        }
         try {
             fos = new FileOutputStream(fileStore);
         } catch (FileNotFoundException e) {
@@ -76,6 +80,7 @@ public class SecondActivity extends Activity {
         format.setInteger(MediaFormat.KEY_BIT_RATE, rate);
 
         try {
+            // TODO: 18-10-26  需判断设备支不支持 MINE_TYPE 编码
             mEncode = MediaCodec.createEncoderByType(MINE_TYPE);
             mEncode.configure(format, null, null, MediaCodec.CONFIGURE_FLAG_ENCODE);
         } catch (IOException e) {
@@ -84,7 +89,6 @@ public class SecondActivity extends Activity {
 
         //audio recorder init
         bufferSize = AudioRecord.getMinBufferSize(sampleRate, channelConfig, audioFormat) * 2;
-        buffer = new byte[bufferSize];
         mRecord = new AudioRecord(MediaRecorder.AudioSource.MIC, sampleRate, channelConfig,
                 audioFormat, bufferSize);
     }
@@ -92,6 +96,7 @@ public class SecondActivity extends Activity {
     private View.OnClickListener mStartListener = new View.OnClickListener() {
         @Override
         public void onClick(View v) {
+            if (mRecord==null) return;
             mEncode.start();
             mRecord.startRecording();
             isRecording = true;
@@ -131,7 +136,7 @@ public class SecondActivity extends Activity {
 
 
     class MyThread extends Thread {
-        public MyThread(@NonNull String name) {
+        MyThread(@NonNull String name) {
             super(name);
         }
 
@@ -160,14 +165,13 @@ public class SecondActivity extends Activity {
             Log.e(TAG, "length-->" + length);
             if (length > 0) {
                 mEncode.queueInputBuffer(index, 0, length, System.nanoTime() / 1000, 0);
-            } else {
             }
         }
         MediaCodec.BufferInfo mInfo = new MediaCodec.BufferInfo();
         int outIndex;
         do {
             outIndex = mEncode.dequeueOutputBuffer(mInfo, 0);
-            Log.e(TAG, "audio flag---->" + mInfo.flags + "/" + outIndex);
+            Log.e(TAG, "outIndex=" + outIndex);
             if (outIndex >= 0) {
                 ByteBuffer buffer = getOutputBuffer(outIndex);
                 buffer.position(mInfo.offset);
@@ -176,11 +180,6 @@ public class SecondActivity extends Activity {
                 addADTStoPacket(temp, temp.length);
                 fos.write(temp);
                 mEncode.releaseOutputBuffer(outIndex, false);
-            } else if (outIndex == MediaCodec.INFO_TRY_AGAIN_LATER) {
-                Log.e(TAG, "readOutputData: INFO_TRY_AGAIN_LATER");
-
-            } else if (outIndex == MediaCodec.INFO_OUTPUT_FORMAT_CHANGED) {
-                Log.e(TAG, "readOutputData: INFO_OUTPUT_FORMAT_CHANGED");
             }
         } while (outIndex >= 0);
     }
@@ -204,6 +203,7 @@ public class SecondActivity extends Activity {
 
     /**
      * 停止录制
+     * 释放资源
      */
     public void stop() {
         try {
@@ -211,10 +211,14 @@ public class SecondActivity extends Activity {
             mThread.join();
             mThread = null;
             mRecord.stop();
+            mRecord.release();
+            mRecord = null;
             mEncode.stop();
             mEncode.release();
+            mEncode=null;
             fos.flush();
             fos.close();
+            Toast.makeText(SecondActivity.this,"音频文件位置:"+fileStore,Toast.LENGTH_SHORT).show();
         } catch (Exception e) {
             e.printStackTrace();
         }
